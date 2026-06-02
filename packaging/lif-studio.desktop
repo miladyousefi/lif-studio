@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=LIF Studio
+Comment=Convert Leica LIF files to colored TIFF and analyze them
+Exec=/opt/lif-studio/lif-studio
+Icon=lif-studio
+Terminal=false
+Categories=Science;Graphics;Education;
+Keywords=LIF;microscopy;Leica;TIFF;fluorescence;

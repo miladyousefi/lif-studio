@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# PyInstaller build output
+build/
+dist/
+*.spec.bak
+
+# Microscopy data — never commit large/raw data
+*.lif
+*.tif
+*.tiff
+Project001/
+colored_tiff/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# App config (per-user)
+.lif_studio/
