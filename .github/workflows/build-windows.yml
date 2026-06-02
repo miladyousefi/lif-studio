@@ -10,6 +10,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:        # lets you run it manually from the Actions tab
 
+permissions:
+  contents: write           # needed to create a Release and upload the .exe zip
+
 jobs:
   build:
     runs-on: windows-latest
