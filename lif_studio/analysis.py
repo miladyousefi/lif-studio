@@ -239,8 +239,8 @@ def analyze_lif(
                 log("Cancelled by user.")
                 break
             try:
-                xarr = project_z(image.asxarray(), cfg.z_projection)
-                stack = to_channel_stack(xarr)
+                arr, dims = project_z(image.asarray(), image.dims, cfg.z_projection)
+                stack = to_channel_stack(arr, dims)
                 metrics, hist = analyze_series(stack, cfg)
                 row = {"image": image.name, "channels": int(stack.shape[0])}
                 row.update(metrics)

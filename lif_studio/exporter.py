@@ -4,7 +4,7 @@ No Qt here on purpose: this module is import-safe for the GUI, a CLI, tests,
 or a notebook. The GUI wraps it in a worker thread (see ``ui/workers.py``).
 
 Pipeline per image:
-  1. read series as an xarray DataArray (named dims: Z, C, Y, X)
+  1. read series as a numpy array with its dim codes (Z, C, Y, X)
   2. project the Z stack (max / mean / first)
   3. for each configured channel: auto-scale to 0-255, apply its contrast
      window, tint by its color, and add into the RGB canvas
@@ -94,26 +94,39 @@ def _contrast_window(norm: np.ndarray, lo: int, hi: int) -> np.ndarray:
     return np.clip((norm - lo) / (hi - lo) * 255.0, 0.0, 255.0)
 
 
-def project_z(xarr, z_projection: str):
-    """Collapse the Z dimension of an xarray DataArray, if present."""
-    if "Z" not in getattr(xarr, "dims", ()):
-        return xarr
+def project_z(arr: np.ndarray, dims, z_projection: str):
+    """Collapse the Z axis of a numpy array, if present.
+
+    ``dims`` is the per-axis dimension codes (e.g. ``"ZCYX"``) as exposed by
+    ``LifImage.dims``. Returns ``(array, dims)`` with the Z axis removed.
+    """
+    arr = np.asarray(arr)
+    if "Z" not in dims:
+        return arr, dims
+    axis = list(dims).index("Z")
     if z_projection == Z_MEAN:
-        return xarr.mean(dim="Z")
-    if z_projection == Z_FIRST:
-        return xarr.isel(Z=0)
-    return xarr.max(dim="Z")  # default: max projection (LAS X-like)
+        arr = arr.mean(axis=axis)
+    elif z_projection == Z_FIRST:
+        arr = np.take(arr, 0, axis=axis)
+    else:  # default: max projection (LAS X-like)
+        arr = arr.max(axis=axis)
+    dims = tuple(d for d in dims if d != "Z")
+    return arr, dims
 
 
-def to_channel_stack(xarr) -> np.ndarray:
-    """Return a (C, Y, X) array regardless of original dim order."""
-    dims = getattr(xarr, "dims", None)
-    if dims and "C" in dims:
-        order = ["C"] + [d for d in ("Y", "X") if d in dims]
-        order += [d for d in dims if d not in order]
-        arr = xarr.transpose(*order).values
+def to_channel_stack(arr: np.ndarray, dims) -> np.ndarray:
+    """Return a (C, Y, X) array regardless of original axis order.
+
+    ``dims`` is the per-axis dimension codes for ``arr`` (e.g. ``"CYX"``).
+    """
+    arr = np.asarray(arr)
+    if "C" in dims:
+        dim_list = list(dims)
+        order = [dim_list.index("C")]
+        order += [dim_list.index(d) for d in ("Y", "X") if d in dim_list]
+        order += [i for i in range(len(dim_list)) if i not in order]
+        arr = np.transpose(arr, order)
     else:
-        arr = np.asarray(getattr(xarr, "values", xarr))
         arr = arr[None, ...]  # single channel -> add C axis
     if arr.ndim > 3:  # squeeze any leftover singleton dims
         arr = arr.reshape((arr.shape[0],) + arr.shape[-2:])
@@ -224,9 +237,8 @@ def export_lif(
 
             type_name, subdir, channels = resolved
             try:
-                xarr = image.asxarray()
-                xarr = project_z(xarr, cfg.z_projection)
-                stack = to_channel_stack(xarr)
+                arr, dims = project_z(image.asarray(), image.dims, cfg.z_projection)
+                stack = to_channel_stack(arr, dims)
                 if cfg.use_lif_colors:
                     # match LAS X: use the channels' stored LUT colors + ranges
                     rgb = composite_from_meta(stack, read_channel_meta(image))
