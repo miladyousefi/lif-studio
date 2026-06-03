@@ -4,13 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lif-studio"
-version = "2.0.0"
+version = "2.0.1"
 description = "Convert Leica LIF microscopy files to colored TIFF overlays, with quantitative analysis."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "PyQt6>=6.5",
     "liffile>=2024.1",
+    # liffile keeps these as optional extras, but it needs them at runtime to
+    # decode compressed LIF frames (imagecodecs) and external TIFF references
+    # (tifffile). Declared explicitly so packaged builds actually include them.
+    "imagecodecs>=2023.1",
+    "tifffile>=2023.1",
     "numpy>=1.24",
     "pillow>=10.0",
     "scipy>=1.10",

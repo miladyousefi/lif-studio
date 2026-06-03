@@ -8,15 +8,29 @@
 
 import os
 import sys
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_all
 
 # SPECPATH is injected by PyInstaller = directory containing this spec.
 PROJECT = os.path.abspath(os.path.join(SPECPATH, ".."))
 ICON = os.path.join(SPECPATH, "icon.ico")
 
+# liffile decodes compressed LIF frames via imagecodecs and reads external TIFF
+# references via tifffile. Both are *lazy* imports (and only optional extras of
+# liffile), so PyInstaller's static analysis would miss the compiled codec
+# submodules / bundled DLLs. collect_all() drags in every submodule, data file,
+# and dynamic library for each — without this the packaged app dies at export
+# time with "No module named ..." / "requires the 'imagecodecs' package".
+_extra_datas, _extra_bins, _extra_hidden = [], [], []
+for _pkg in ("imagecodecs", "tifffile"):
+    _d, _b, _h = collect_all(_pkg)
+    _extra_datas += _d
+    _extra_bins += _b
+    _extra_hidden += _h
+
 hidden = (
     collect_submodules("liffile")
     + collect_submodules("scipy.ndimage")
+    + _extra_hidden
     + ["PIL.Image"]
 )
 
@@ -24,7 +38,7 @@ hidden = (
 # environment (e.g. a large conda base) but are NOT used by LIF Studio.
 EXCLUDES = [
     "matplotlib", "tkinter", "PyQt5", "PySide6", "PySide2", "pytest",
-    "pandas", "tensorflow", "tensorboard", "keras", "torch", "torchvision",
+    "xarray", "pandas", "tensorflow", "tensorboard", "keras", "torch", "torchvision",
     "sqlalchemy", "tornado", "zmq", "IPython", "ipykernel", "jupyter",
     "notebook", "nbconvert", "nbformat", "sphinx", "numba", "llvmlite",
     "sympy", "bokeh", "dask", "distributed", "h5py", "tables", "pyarrow",
@@ -34,8 +48,8 @@ EXCLUDES = [
 a = Analysis(
     [os.path.join(PROJECT, "main.py")],
     pathex=[PROJECT],
-    binaries=[],
-    datas=[],
+    binaries=_extra_bins,
+    datas=_extra_datas,
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],

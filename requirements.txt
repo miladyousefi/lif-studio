@@ -1,5 +1,9 @@
 PyQt6>=6.5
 liffile>=2024.1
+# Decoders liffile loads lazily at runtime (compressed LIF frames / TIFF refs).
+# Optional extras of liffile, so they must be pinned here to be installed+bundled.
+imagecodecs>=2023.1
+tifffile>=2023.1
 numpy>=1.24
 pillow>=10.0
 scipy>=1.10
