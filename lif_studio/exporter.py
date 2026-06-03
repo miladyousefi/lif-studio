@@ -45,6 +45,7 @@ class ExportResult:
     exported: int = 0
     skipped: int = 0
     errors: int = 0
+    missing_blocks: int = 0          # images whose pixel data isn't in the file
     output_root: Optional[Path] = None
     per_type: dict[str, int] = field(default_factory=dict)
     paths: list[Path] = field(default_factory=list)
@@ -264,6 +265,15 @@ def export_lif(
                 result.per_type[type_name] = result.per_type.get(type_name, 0) + 1
                 result.paths.append(out_path)
                 log(f"[{idx}/{total}] ✓ {type_name}: {out_path.name}")
+            except KeyError as e:  # missing pixel-data block (incomplete file)
+                result.errors += 1
+                block = str(e).strip("'\"")
+                if block.startswith("MemBlock"):
+                    result.missing_blocks += 1
+                    log(f"[{idx}/{total}] ✗ {name} — pixel data ({block}) "
+                        f"is not in this .lif file")
+                else:
+                    log(f"[{idx}/{total}] ✗ {name} — {e}")
             except Exception as e:  # keep going on a bad series
                 result.errors += 1
                 log(f"[{idx}/{total}] ✗ {name} — {e}")
@@ -275,4 +285,17 @@ def export_lif(
         f"Done. {result.exported} exported, "
         f"{result.skipped} skipped, {result.errors} errors."
     )
+    if result.missing_blocks:
+        try:
+            size_gb = lif_path.stat().st_size / 1e9
+            size_note = f" (file on disk is {size_gb:.2f} GB)"
+        except OSError:
+            size_note = ""
+        log(
+            f"⚠ {result.missing_blocks} image(s) could not be read because their "
+            f"pixel data is not present in this .lif file{size_note}. The file is "
+            "incomplete — most often a download/copy that was interrupted, or a "
+            "transfer that truncated a large file. Re-copy the original .lif in "
+            "full (compare its size against the source) and export again."
+        )
     return result

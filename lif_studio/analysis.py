@@ -247,6 +247,14 @@ def analyze_lif(
                 result.rows.append(row)
                 result.histograms.append(hist)
                 log(f"[{idx}/{total}] ✓ {image.name}")
+            except KeyError as e:
+                result.errors += 1
+                block = str(e).strip("'\"")
+                if block.startswith("MemBlock"):
+                    log(f"[{idx}/{total}] ✗ {image.name} — pixel data ({block}) "
+                        f"is not in this .lif file (incomplete copy?)")
+                else:
+                    log(f"[{idx}/{total}] ✗ {image.name} — {e}")
             except Exception as e:
                 result.errors += 1
                 log(f"[{idx}/{total}] ✗ {image.name} — {e}")
