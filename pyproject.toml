@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lif-studio"
-version = "2.0.2"
+version = "2.0.3"
 description = "Convert Leica LIF microscopy files to colored TIFF overlays, with quantitative analysis."
 readme = "README.md"
 requires-python = ">=3.10"

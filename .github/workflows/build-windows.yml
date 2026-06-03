@@ -22,7 +22,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          architecture: x64        # 64-bit: required to read .lif files > 2 GB
           cache: pip
+
+      - name: Verify 64-bit Python
+        run: python -c "import struct,sys; assert struct.calcsize('P')*8==64, 'NOT 64-bit'; print('Python', sys.version, '64-bit OK')"
 
       - name: Install dependencies
         run: |

@@ -211,6 +211,8 @@ def export_lif(
 
     lif_path = Path(lif_path)
     result = ExportResult(output_root=resolve_output_root(lif_path, cfg, custom_dir))
+    data_end: Optional[int] = None      # byte offset where readable data stops
+    file_size: Optional[int] = None     # actual size of the .lif on disk
 
     def log(msg: str) -> None:
         if log_cb:
@@ -221,6 +223,29 @@ def export_lif(
         images = list(lif.images)
         total = len(images)
         log(f"Found {total} image series. Output → {result.output_root}")
+
+        # Diagnostic: how far into the file could liffile actually read data
+        # blocks? If readable data stops well before the end of a full-size
+        # file, the file's bytes are bad past that point (interrupted/corrupt
+        # download) rather than simply short.
+        try:
+            import struct as _struct
+            blocks = [b for b in lif.memory_blocks.values() if b.offset >= 0]
+            data_end = max((b.offset + b.size) for b in blocks) if blocks else 0
+            file_size = lif_path.stat().st_size
+            bits = _struct.calcsize("P") * 8   # 32 = can't seek past ~2-4 GB
+            log(
+                f"Engine: {bits}-bit. Readable data blocks: {len(blocks)} "
+                f"(data ends at {data_end/1e9:.2f} GB of {file_size/1e9:.2f} GB file)."
+            )
+            if bits < 64 and file_size > 2_000_000_000:
+                log(
+                    "⚠ This build is 32-bit and the file is larger than 2 GB — "
+                    "that alone prevents reading the whole file. A 64-bit build is "
+                    "required for files this large."
+                )
+        except Exception:
+            pass
 
         for idx, image in enumerate(images, start=1):
             if cancel_cb and cancel_cb():
@@ -286,16 +311,24 @@ def export_lif(
         f"{result.skipped} skipped, {result.errors} errors."
     )
     if result.missing_blocks:
-        try:
-            size_gb = lif_path.stat().st_size / 1e9
-            size_note = f" (file on disk is {size_gb:.2f} GB)"
-        except OSError:
-            size_note = ""
-        log(
-            f"⚠ {result.missing_blocks} image(s) could not be read because their "
-            f"pixel data is not present in this .lif file{size_note}. The file is "
-            "incomplete — most often a download/copy that was interrupted, or a "
-            "transfer that truncated a large file. Re-copy the original .lif in "
-            "full (compare its size against the source) and export again."
-        )
+        if data_end and file_size and data_end < file_size * 0.97:
+            # File is full size, but readable data stops well before the end →
+            # the bytes past data_end are bad (an interrupted/corrupted copy
+            # that pre-allocated the full size but never finished writing).
+            log(
+                f"⚠ {result.missing_blocks} image(s) could not be read. The file "
+                f"is {file_size/1e9:.2f} GB, but valid image data stops at "
+                f"{data_end/1e9:.2f} GB — the rest of the file is corrupt or was "
+                "never fully written (a download/copy that pre-allocated the size "
+                "but did not finish). Re-copy the original .lif and verify it "
+                "opens fully (e.g. on the source machine), then export again."
+            )
+        else:
+            size_note = f" (file on disk is {file_size/1e9:.2f} GB)" if file_size else ""
+            log(
+                f"⚠ {result.missing_blocks} image(s) could not be read because "
+                f"their pixel data is not present in this .lif file{size_note}. "
+                "The file is incomplete — re-copy the original .lif in full "
+                "(compare its size against the source) and export again."
+            )
     return result
